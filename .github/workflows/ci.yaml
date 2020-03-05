@@ -31,3 +31,45 @@ jobs:
 
       - name: cargo clippy
         run: cargo +nightly clippy -- -D warnings
+
+  build_publish:
+    name: build & publish to AWS ECR
+    runs-on: ubuntu-latest
+    # Only build and publish a Docker image if 1) 'test' was successful and 2) on branch master
+    needs: test
+    if: github.ref == 'refs/heads/master'
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          # Fetch all commits since we use the total commit count to determine the build version
+          fetch-depth: 0
+
+      - name: Determine & set BUILD_VERSION
+        run: |
+          VERSION=$(cargo metadata --format-version 1 --no-deps | jq '.packages[0].version' | tr -d '"')
+          GIT_COUNT=$(git rev-list $GITHUB_SHA --count)
+          
+          echo ::set-env name=BUILD_VERSION::$VERSION-$GIT_COUNT
+
+      - name: Setup AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+
+      - name: Login to AWS ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build, tag and push Docker image to AWS ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker build --tag $ECR_REGISTRY/hello-world:$BUILD_VERSION .
+          docker push $ECR_REGISTRY/hello-world:$BUILD_VERSION
+
+      - name: Logout of Amazon ECR
+        if: always()
+        run: docker logout ${{ steps.login-ecr.outputs.registry }}
