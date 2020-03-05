@@ -1,0 +1,16 @@
+{
+    "rules": [
+        {
+            "rulePriority": 1,
+            "description": "Limit amount of images to 100",
+            "action": {
+                "type": "expire"
+            },
+            "selection": {
+                "countType": "imageCountMoreThan",
+                "countNumber": 100,
+                "tagStatus": "any"
+            }
+        }
+    ]
+}
